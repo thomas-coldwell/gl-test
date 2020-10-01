@@ -42,8 +42,8 @@ void main () {
 
   int extent = int(radius);
 
-  for (int i = -50; i <= 50; i++) {
-    for (int j = -50; j <= 50; j++) {
+  for (int i = -20; i <= 20; i++) {
+    for (int j = -20; j <= 20; j++) {
       if (i >= -extent && i <= extent && j >= -extent && j <= extent) {
       float offsetX = float(i);
       float offsetY = float(j);
@@ -56,6 +56,18 @@ void main () {
       // Normalise the new index back into the 0.0 to 1.0 range
       x /= width;
       y /= height;
+      if (x < 0.0) {
+        x = 0.0;
+      }
+      if (x > 1.0) {
+        x = 1.0;
+      }
+      if (y < 0.0) {
+        y = 0.0;
+      }
+      if (y > 1.0) {
+        y = 1.0;
+      }
       // Get gaussian amplitude
       float g = gauss(offsetX, offsetY);
       // Get the color of neighbouring pixel
