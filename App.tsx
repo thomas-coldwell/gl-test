@@ -1,6 +1,14 @@
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useRef, useState } from "react";
-import { Image, StyleSheet, Text, View, PixelRatio } from "react-native";
+import {
+  Image,
+  StyleSheet,
+  Text,
+  View,
+  PixelRatio,
+  TextInput,
+  Button,
+} from "react-native";
 import { ExpoWebGLRenderingContext, GLView } from "expo-gl";
 import { Asset } from "expo-asset";
 
@@ -23,32 +31,37 @@ uniform float height;
 varying vec2 uv;
 uniform float radius;
 
-float gauss (float x) {
+float gauss (float x, float y) {
   float sigma = (0.5 * radius);
-  return (1.0/sqrt(2.0*3.142*sigma*sigma))*exp(-0.5*(x*x)/(sigma*sigma));
+  return (1.0/(2.0*3.142*sigma*sigma))*exp(-0.5*((x*x) + (y*y))/(sigma*sigma));
 }
 
 void main () {
   // Get the color of the fragment pixel
-  vec4 color = texture2D(texture, vec2(uv.x, uv.y)) * gauss(0.0);
+  vec4 color = texture2D(texture, vec2(uv.x, uv.y)) * gauss(0.0, 0.0);
 
   int extent = int(radius);
 
-  for (int j = -20; j <= 20; j++) {
-    if (j >= -extent && j <= extent) {
-    float f_j = float(j);
-    float offset = f_j;
-    // Caclulate the current pixel index
-    float x = uv.x * width;
-    // Get the neighbouring pixel index
-    x += offset;
-    // Normalise the new index back into the 0.0 to 1.0 range
-    x /= width;
-    // Get gaussian amplitude
-    float g = gauss(offset);
-    // Get the color of neighbouring pixel
-    vec4 previousColor = texture2D(texture, vec2(x, uv.y)) * g;
-    color += previousColor;
+  for (int i = -50; i <= 50; i++) {
+    for (int j = -50; j <= 50; j++) {
+      if (i >= -extent && i <= extent && j >= -extent && j <= extent) {
+      float offsetX = float(i);
+      float offsetY = float(j);
+      // Caclulate the current pixel index
+      float x = uv.x * width;
+      float y = uv.y * height;
+      // Get the neighbouring pixel index
+      x += offsetX;
+      y += offsetY;
+      // Normalise the new index back into the 0.0 to 1.0 range
+      x /= width;
+      y /= height;
+      // Get gaussian amplitude
+      float g = gauss(offsetX, offsetY);
+      // Get the color of neighbouring pixel
+      vec4 previousColor = texture2D(texture, vec2(x, y)) * g;
+      color += previousColor;
+      }
     }
   }
 
@@ -59,6 +72,41 @@ void main () {
 export default function App() {
   //
   const [img, setImg] = useState({});
+
+  const [isProcessing, setProcessing] = useState(true);
+
+  useEffect(() => {
+    const performBlur = async () => {
+      const gl = glCtx.current;
+      const program = glProgram.current;
+      const verts = glVerts.current;
+      console.time("Blur time");
+      if (isProcessing && gl && program && verts) {
+        gl.uniform1f(gl.getUniformLocation(program, "radius"), blur);
+        gl.clearColor(0, 0, 1, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.drawArrays(gl.TRIANGLES, 0, verts.length / 2);
+        gl.endFrameEXP();
+
+        const output = await GLView.takeSnapshotAsync(gl);
+        var reader = new FileReader();
+        reader.readAsDataURL(output.uri as Blob);
+        reader.onloadend = function () {
+          var base64data = reader.result;
+          setImg({ ...output, uri: base64data });
+        };
+      }
+      setProcessing(false);
+      console.timeEnd("Blur time");
+    };
+    performBlur();
+  }, [isProcessing]);
+
+  const glCtx = useRef<ExpoWebGLRenderingContext>();
+  const glProgram = useRef<WebGLProgram>();
+  const glVerts = useRef<Float32Array>();
+
+  const [blur, setBlur] = useState(10.0);
 
   const onContextCreate = async (gl: ExpoWebGLRenderingContext) => {
     // Setup the shaders for our GL context so it draws from texImage2D
@@ -101,25 +149,12 @@ export default function App() {
             asset as any
           );
           gl.uniform1i(gl.getUniformLocation(program, "texture"), 0);
-
           gl.uniform1f(gl.getUniformLocation(program, "width"), asset.width);
           gl.uniform1f(gl.getUniformLocation(program, "height"), asset.height);
-          gl.uniform1f(gl.getUniformLocation(program, "radius"), 15.0);
 
-          gl.clearColor(0, 0, 1, 1);
-          gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-          gl.drawArrays(gl.TRIANGLES, 0, verts.length / 2);
-          gl.endFrameEXP();
-
-          const output = await GLView.takeSnapshotAsync(gl);
-          console.log(output);
-          var reader = new FileReader();
-          reader.readAsDataURL(output.uri as Blob);
-          reader.onloadend = function () {
-            var base64data = reader.result;
-            //console.log(base64data);
-            setImg({ ...output, uri: base64data });
-          };
+          glCtx.current = gl;
+          glProgram.current = program;
+          glVerts.current = verts;
         }
       }
     }
@@ -128,8 +163,11 @@ export default function App() {
   return (
     <View style={styles.container}>
       <Image style={styles.image} source={{ uri: testImageUrl }} />
+      <TextInput onChangeText={(text) => setBlur(parseFloat(text))} />
+      <Button title="Blur" onPress={() => setProcessing(true)} />
       <GLView
         style={[styles.image, { opacity: 0.0, position: "absolute" }]}
+        pointerEvents="none"
         onContextCreate={onContextCreate}
       />
       <Image
