@@ -13,6 +13,9 @@ import {
 } from "react-native";
 import { ExpoWebGLRenderingContext, GLView } from "expo-gl";
 import { Asset } from "expo-asset";
+import { Slider } from "@miblanchard/react-native-slider";
+//@ts-ignore
+import _ from "lodash";
 
 const testImageUrl = "https://picsum.photos/id/1036/1280/720";
 
@@ -36,15 +39,9 @@ uniform int radius;
 uniform highp int pass;
 
 float f_radius = float(radius);
+float sigma = ((0.5 * f_radius) + exp(-0.05 * f_radius));
 
 float gauss (float x) {
-  float sigma = (0.5 * f_radius);
-  if (radius == 1) {
-    sigma *= 1.8;
-  }
-  if (radius == 2) {
-    sigma *= 1.2;
-  }
   float g = (1.0/sqrt(2.0*3.142*sigma*sigma))*exp(-0.5*(x*x)/(sigma*sigma));
   return g;
 }
@@ -103,92 +100,96 @@ export default function App() {
   //
   const [img, setImg] = useState({});
 
-  const [isProcessing, setProcessing] = useState(true);
-
-  useEffect(() => {
-    const performBlur = async () => {
-      // Get the GL context, program and verts from its initial setup
-      const gl = glCtx.current;
-      const program = glProgram.current;
-      const verts = glVerts.current;
-      const image = originalImage.current;
-      // Check all are not null
-      if (isProcessing && gl && program && verts && image) {
-        // Note the start of the blur op
-        console.time("Blur time");
-        // Perform seperate vertical and horizonal blur passes for
-        // efficiency - http://rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/
-        // Set the blur radius for the gaussian blur
-        gl.uniform1i(gl.getUniformLocation(program, "texture"), 0);
-        gl.uniform1i(gl.getUniformLocation(program, "radius"), blur);
-        gl.uniform1i(gl.getUniformLocation(program, "pass"), 0);
-        // Setup so first pass renders to a texture rather than to canvas
-        // Create and bind the framebuffer
-        const firstPassTexture = gl.createTexture();
-        // Set the active texture to the texture 0 binding (0-30)
-        gl.activeTexture(gl.TEXTURE1);
-        // Bind the texture to WebGL stating what type of texture it is
-        gl.bindTexture(gl.TEXTURE_2D, firstPassTexture);
-        // Set some parameters for the texture
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        // Then set the data of this texture using texImage2D
-        gl.texImage2D(
-          gl.TEXTURE_2D,
-          0,
-          gl.RGBA,
-          image.width,
-          image.height,
-          0,
-          gl.RGBA,
-          gl.UNSIGNED_BYTE,
-          null
-        );
-        const fb = gl.createFramebuffer();
-        gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-        // attach the texture as the first color attachment
-        const attachmentPoint = gl.COLOR_ATTACHMENT0;
-        gl.framebufferTexture2D(
-          gl.FRAMEBUFFER,
-          attachmentPoint,
-          gl.TEXTURE_2D,
-          firstPassTexture,
-          0
-        );
-        // Actually draw using the shader program we setup!
-        gl.drawArrays(gl.TRIANGLES, 0, verts.length / 2);
-        // Fab now we want to do a second pass - let's use the first pass
-        // texture we just wrote to
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        gl.uniform1i(gl.getUniformLocation(program, "texture"), 1);
-        gl.uniform1i(gl.getUniformLocation(program, "pass"), 1);
-        gl.drawArrays(gl.TRIANGLES, 0, verts.length / 2);
-        gl.endFrameEXP();
-        console.timeEnd("Blur time");
-
-        const output = await GLView.takeSnapshotAsync(gl);
-        if (Platform.OS === "web") {
-          var reader = new window.FileReader();
-          reader.readAsDataURL(output.uri as Blob);
-          reader.onloadend = function () {
-            var base64data = reader.result;
-            setImg({ ...output, uri: base64data });
-          };
-        } else {
-          setImg(output);
-        }
-      }
-      setProcessing(false);
-    };
-    performBlur();
-  }, [isProcessing]);
-
   const glCtx = useRef<ExpoWebGLRenderingContext>();
   const glProgram = useRef<WebGLProgram>();
   const glVerts = useRef<Float32Array>();
   const originalImage = useRef<any>();
 
-  const [blur, setBlur] = useState(10);
+  const [blur, setBlur] = useState(1);
+
+  const performBlur = async () => {
+    // Get the GL context, program and verts from its initial setup
+    const gl = glCtx.current;
+    const program = glProgram.current;
+    const verts = glVerts.current;
+    const image = originalImage.current;
+    // Check all are not null
+    if (gl && program && verts && image) {
+      // Note the start of the blur op
+      console.log(blur);
+      console.time("Blur time");
+      // Perform seperate vertical and horizonal blur passes for
+      // efficiency - http://rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/
+      // Set the blur radius for the gaussian blur
+      gl.uniform1i(gl.getUniformLocation(program, "texture"), 0);
+      gl.uniform1i(gl.getUniformLocation(program, "radius"), blur);
+      gl.uniform1i(gl.getUniformLocation(program, "pass"), 0);
+      // Setup so first pass renders to a texture rather than to canvas
+      // Create and bind the framebuffer
+      const firstPassTexture = gl.createTexture();
+      // Set the active texture to the texture 0 binding (0-30)
+      gl.activeTexture(gl.TEXTURE1);
+      // Bind the texture to WebGL stating what type of texture it is
+      gl.bindTexture(gl.TEXTURE_2D, firstPassTexture);
+      // Set some parameters for the texture
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      // Then set the data of this texture using texImage2D
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        image.width,
+        image.height,
+        0,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        null
+      );
+      const fb = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      // attach the texture as the first color attachment
+      const attachmentPoint = gl.COLOR_ATTACHMENT0;
+      gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        attachmentPoint,
+        gl.TEXTURE_2D,
+        firstPassTexture,
+        0
+      );
+      // Actually draw using the shader program we setup!
+      gl.drawArrays(gl.TRIANGLES, 0, verts.length / 2);
+      // Fab now we want to do a second pass - let's use the first pass
+      // texture we just wrote to
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.uniform1i(gl.getUniformLocation(program, "texture"), 1);
+      gl.uniform1i(gl.getUniformLocation(program, "pass"), 1);
+      gl.drawArrays(gl.TRIANGLES, 0, verts.length / 2);
+      gl.endFrameEXP();
+      console.timeEnd("Blur time");
+    }
+  };
+
+  const takeSnapshot = async () => {
+    const gl = glCtx.current;
+    if (gl) {
+      const output = await GLView.takeSnapshotAsync(gl);
+      if (Platform.OS === "web") {
+        var reader = new window.FileReader();
+        reader.readAsDataURL(output.uri as Blob);
+        reader.onloadend = function () {
+          var base64data = reader.result;
+          setImg({ uri: base64data });
+        };
+      } else {
+        setImg(output);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!_.isEmpty(img)) performBlur();
+  }, [blur]);
 
   const onContextCreate = async (gl: ExpoWebGLRenderingContext) => {
     // Setup the shaders for our GL context so it draws from texImage2D
@@ -272,6 +273,8 @@ export default function App() {
           glProgram.current = program;
           glVerts.current = verts;
           originalImage.current = asset;
+          await performBlur();
+          await takeSnapshot();
         }
       }
     }
@@ -280,10 +283,18 @@ export default function App() {
   return (
     <View style={styles.container}>
       <Image style={styles.image} source={{ uri: testImageUrl }} />
-      <TextInput onChangeText={(text) => setBlur(parseFloat(text))} />
-      <Button title="Blur" onPress={() => setProcessing(true)} />
+      <Slider
+        value={blur}
+        onValueChange={(value) =>
+          setBlur(Math.round((value as unknown) as number))
+        }
+        minimumValue={1}
+        maximumValue={50}
+        containerStyle={{ width: 300 }}
+        onSlidingComplete={() => {}}
+      />
       <GLView
-        style={[styles.image, { opacity: 0.0, position: "absolute" }]}
+        style={[styles.image, { transform: [{ scaleY: -1 }] }]}
         pointerEvents="none"
         onContextCreate={onContextCreate}
       />
