@@ -23,7 +23,6 @@ const vertShader = `
 precision highp float;
 attribute vec2 position;
 varying vec2 uv;
-uniform highp int pass;
 void main () {
   uv = position;
   gl_Position = vec4(1.0 - 2.0 * uv, 0, 1);
@@ -31,27 +30,27 @@ void main () {
 
 const fragShader = `
 precision highp float;
+precision highp int;
 uniform sampler2D texture;
-uniform float width;
-uniform float height;
+uniform highp float width;
+uniform highp float height;
 varying vec2 uv;
-uniform int radius;
+uniform highp int radius;
 uniform highp int pass;
 
-float f_radius = float(radius);
-float sigma = ((0.5 * f_radius) + exp(-0.05 * f_radius));
-
-float gauss (float x) {
+float gauss (float sigma, float x) {
   float g = (1.0/sqrt(2.0*3.142*sigma*sigma))*exp(-0.5*(x*x)/(sigma*sigma));
   return g;
 }
 
 void main () {
+  float f_radius = float(radius);
+  float sigma = ((0.5 * f_radius) + exp(-0.05 * f_radius));
   // Get the color of the fragment pixel
   vec4 color = texture2D(texture, vec2(uv.x, uv.y));
-  color *= gauss(0.0);
+  color *= gauss(sigma, 0.0);
 
-  for (int i = -50; i <= 50; i++) {
+  for (int i = -100; i <= 100; i++) {
     if (i >= -radius && i <= radius) {
       float offset = float(i);
       // Caclulate the current pixel index
@@ -79,7 +78,7 @@ void main () {
         pixelIndex = 1.0;
       }
       // Get gaussian amplitude
-      float g = gauss(offset);
+      float g = gauss(sigma, offset);
       // Get the color of neighbouring pixel
       vec4 previousColor = vec4(0.0, 0.0, 0.0, 0.0);
       if (pass == 0) {
@@ -115,9 +114,6 @@ export default function App() {
     const image = originalImage.current;
     // Check all are not null
     if (gl && program && verts && image) {
-      // Note the start of the blur op
-      console.log(blur);
-      console.time("Blur time");
       // Perform seperate vertical and horizonal blur passes for
       // efficiency - http://rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/
       // Set the blur radius for the gaussian blur
@@ -158,15 +154,18 @@ export default function App() {
         0
       );
       // Actually draw using the shader program we setup!
+      gl.clearColor(0, 0, 1, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       gl.drawArrays(gl.TRIANGLES, 0, verts.length / 2);
       // Fab now we want to do a second pass - let's use the first pass
       // texture we just wrote to
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.uniform1i(gl.getUniformLocation(program, "texture"), 1);
       gl.uniform1i(gl.getUniformLocation(program, "pass"), 1);
+      gl.clearColor(0, 0, 1, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       gl.drawArrays(gl.TRIANGLES, 0, verts.length / 2);
       gl.endFrameEXP();
-      console.timeEnd("Blur time");
     }
   };
 
@@ -192,6 +191,9 @@ export default function App() {
   }, [blur]);
 
   const onContextCreate = async (gl: ExpoWebGLRenderingContext) => {
+    console.log(gl.getParameter(gl.VERSION));
+    console.log(gl.getParameter(gl.SHADING_LANGUAGE_VERSION));
+    console.log(gl.getParameter(gl.VENDOR));
     // Setup the shaders for our GL context so it draws from texImage2D
     const vert = gl.createShader(gl.VERTEX_SHADER);
     const frag = gl.createShader(gl.FRAGMENT_SHADER);
@@ -289,7 +291,7 @@ export default function App() {
           setBlur(Math.round((value as unknown) as number))
         }
         minimumValue={1}
-        maximumValue={50}
+        maximumValue={100}
         containerStyle={{ width: 300 }}
         onSlidingComplete={() => {}}
       />
@@ -298,10 +300,12 @@ export default function App() {
         pointerEvents="none"
         onContextCreate={onContextCreate}
       />
-      <Image
-        style={[styles.image, { transform: [{ scaleY: -1 }] }]}
-        source={img}
-      />
+      {!_.isEmpty(img) && (
+        <Image
+          style={[styles.image, { transform: [{ scaleY: -1 }] }]}
+          source={img}
+        />
+      )}
     </View>
   );
 }
