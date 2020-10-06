@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@miblanchard/react-native-slider": "^1.5.0",
+    "buffer": "^5.6.0",
     "expo": "^39.0.0",
     "expo-asset": "~8.2.0",
     "expo-gl": "~9.1.1",
@@ -19,7 +20,8 @@
     "react-dom": "16.13.1",
     "react-native": "https://github.com/expo/react-native/archive/sdk-39.0.0.tar.gz",
     "react-native-console-time-polyfill": "^1.2.1",
-    "react-native-web": "~0.13.7"
+    "react-native-web": "~0.13.7",
+    "read-blob": "^1.1.0"
   },
   "devDependencies": {
     "@babel/core": "^7.8.6",
