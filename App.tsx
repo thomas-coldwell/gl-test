@@ -106,68 +106,97 @@ export default function App() {
   const [blur, setBlur] = useState(40);
 
   const performBlur = async () => {
-    _.throttle(
-      async () => {
-        // Get the GL context, program and verts from its initial setup
-        const gl = glCtx.current;
-        const program = glProgram.current;
-        const verts = glVerts.current;
-        const image = originalImage.current;
-        // Check all are not null
-        if (gl && program && verts && image) {
-          // Perform seperate vertical and horizonal blur passes for
-          // efficiency - http://rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/
-          // Set the blur radius for the gaussian blur
-          gl.uniform1i(gl.getUniformLocation(program, "texture"), 0);
-          gl.uniform1i(gl.getUniformLocation(program, "radius"), blur);
-          gl.uniform1i(gl.getUniformLocation(program, "pass"), 0);
-          // Setup so first pass renders to a texture rather than to canvas
-          // Create and bind the framebuffer
-          const firstPassTexture = gl.createTexture();
-          // Set the active texture to the texture 0 binding (0-30)
-          gl.activeTexture(gl.TEXTURE1);
-          // Bind the texture to WebGL stating what type of texture it is
-          gl.bindTexture(gl.TEXTURE_2D, firstPassTexture);
-          // Set some parameters for the texture
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-          // Then set the data of this texture using texImage2D
-          gl.texImage2D(
-            gl.TEXTURE_2D,
-            0,
-            gl.RGBA,
-            image.width,
-            image.height,
-            0,
-            gl.RGBA,
-            gl.UNSIGNED_BYTE,
-            null
-          );
-          const fb = gl.createFramebuffer();
-          gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-          // attach the texture as the first color attachment
-          const attachmentPoint = gl.COLOR_ATTACHMENT0;
-          gl.framebufferTexture2D(
-            gl.FRAMEBUFFER,
-            attachmentPoint,
-            gl.TEXTURE_2D,
-            firstPassTexture,
-            0
-          );
-          // Actually draw using the shader program we setup!
-          gl.drawArrays(gl.TRIANGLES, 0, verts.length / 2);
-          // Fab now we want to do a second pass - let's use the first pass
-          // texture we just wrote to
-          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-          gl.uniform1i(gl.getUniformLocation(program, "texture"), 1);
-          gl.uniform1i(gl.getUniformLocation(program, "pass"), 1);
-          gl.drawArrays(gl.TRIANGLES, 0, verts.length / 2);
-          gl.endFrameEXP();
-        }
-      },
-      50,
-      { leading: true }
-    )();
+    // Get the GL context, program and verts from its initial setup
+    const gl = glCtx.current;
+    const program = glProgram.current;
+    const verts = glVerts.current;
+    const image = originalImage.current;
+    // Check all are not null
+    if (gl && program && verts && image) {
+      // Perform seperate vertical and horizonal blur passes for
+      // efficiency - http://rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/
+      // Set the blur radius for the gaussian blur
+      gl.uniform1i(gl.getUniformLocation(program, "texture"), 0);
+      gl.uniform1i(gl.getUniformLocation(program, "radius"), blur);
+      gl.uniform1i(gl.getUniformLocation(program, "pass"), 0);
+      // Setup so first pass renders to a texture rather than to canvas
+      // Create and bind the framebuffer
+      const firstPassTexture = gl.createTexture();
+      // Set the active texture to the texture 0 binding (0-30)
+      gl.activeTexture(gl.TEXTURE1);
+      // Bind the texture to WebGL stating what type of texture it is
+      gl.bindTexture(gl.TEXTURE_2D, firstPassTexture);
+      // Set some parameters for the texture
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      // Then set the data of this texture using texImage2D
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        image.width,
+        image.height,
+        0,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        null
+      );
+      const fb = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      // attach the texture as the first color attachment
+      const attachmentPoint = gl.COLOR_ATTACHMENT0;
+      gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        attachmentPoint,
+        gl.TEXTURE_2D,
+        firstPassTexture,
+        0
+      );
+      // Actually draw using the shader program we setup!
+      gl.drawArrays(gl.TRIANGLES, 0, verts.length / 2);
+
+      const secondPassTexture = gl.createTexture();
+      // Set the active texture to the texture 0 binding (0-30)
+      gl.activeTexture(gl.TEXTURE2);
+      // Bind the texture to WebGL stating what type of texture it is
+      gl.bindTexture(gl.TEXTURE_2D, secondPassTexture);
+      // Set some parameters for the texture
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      // Then set the data of this texture using texImage2D
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        image.width,
+        image.height,
+        0,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        null
+      );
+      const fb2 = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb2);
+      // attach the texture as the first color attachment
+      const attachmentPoint2 = gl.COLOR_ATTACHMENT0;
+      gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        attachmentPoint2,
+        gl.TEXTURE_2D,
+        secondPassTexture,
+        0
+      );
+
+      // Fab now we want to do a second pass - let's use the first pass
+      // texture we just wrote to
+      if (Platform.OS === "web") {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      }
+      gl.uniform1i(gl.getUniformLocation(program, "texture"), 1);
+      gl.uniform1i(gl.getUniformLocation(program, "pass"), 1);
+      gl.drawArrays(gl.TRIANGLES, 0, verts.length / 2);
+      gl.endFrameEXP();
+    }
   };
 
   const takeSnapshot = async () => {
@@ -186,6 +215,7 @@ export default function App() {
       } else {
         setImg(output);
       }
+      console.log(output);
     }
   };
 
@@ -203,11 +233,11 @@ export default function App() {
       if (asset.width && asset.height) {
         // Imperatively creat a GL instance
         const gl = await GLView.createContextAsync();
-        // gl.clear(gl.COLOR_BUFFER_BIT);
-        // gl.canvas.width = asset.width;
-        // gl.canvas.height = asset.height;
-        //gl.viewport(0, 0, asset.width, asset.height);
-        //console.log(gl.drawingBufferHeight, gl.drawingBufferWidth);
+        if (gl.canvas !== null) {
+          gl.canvas.width = asset.width;
+          gl.canvas.height = asset.height;
+        }
+        gl.viewport(0, 0, asset.width, asset.height);
         // Setup the shaders for our GL context so it draws from texImage2D
         const vert = gl.createShader(gl.VERTEX_SHADER);
         const frag = gl.createShader(gl.FRAGMENT_SHADER);
@@ -291,7 +321,7 @@ export default function App() {
             glVerts.current = verts;
             originalImage.current = asset;
             await performBlur();
-            await takeSnapshot();
+            setTimeout(() => takeSnapshot(), 100);
           }
         }
       }
